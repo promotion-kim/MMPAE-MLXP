@@ -199,6 +199,28 @@ kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- ls -lah /data
 
 Use `/data` on the PVC for this workflow. Avoid relying on machine-local disks unless your cluster guarantees they are mounted in the training pod.
 
+## End-to-End PVC Preparation
+
+Run the following steps inside the MLXP helper pod workflow before submitting training:
+
+1. Download raw polyOne parquet shards to `/data/polyone`.
+2. Copy the local `polyBERT` tokenizer folder to `/data/polyBERT`.
+3. Download `PolyBert_Regressor.pt` to `/data/ckpt`.
+4. Tokenize raw polyOne into `/data/polyone_tokenized`.
+5. Run `mmpae-load-check` before training.
+
+The final PVC layout should be:
+
+```text
+/data/polyone/*.parquet
+/data/polyone_tokenized/*.parquet
+/data/polyBERT/
+/data/ckpt/PolyBert_Regressor.pt
+/data/scripts/polyone_token_extract.py
+/data/scripts/train_HMMPAE.py
+/data/runs/
+```
+
 ## Raw polyOne Data
 
 Copy and run the downloader inside the PVC shell pod:
@@ -230,7 +252,7 @@ Each full shard has 500,000 rows. `polyOne_hx.parquet` has 202,698 rows in the v
 
 ## PolyBERT Tokenizer
 
-The current workflow uses a local tokenizer folder named `polyBERT`. Copy it into the PVC:
+The current workflow uses a local tokenizer folder named `polyBERT`. This repository does not provide a public downloader for it because public Hugging Face access to `kuelumbus/polyBERT` returned authorization errors during setup. Obtain the folder from the code/data owner or a shared internal storage location, then copy it into the PVC:
 
 ```bash
 kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- mkdir -p /data/polyBERT
@@ -251,9 +273,26 @@ tokenizer_config.json
 
 This folder does not include pretrained `AutoModel` weights. The training code falls back to constructing the encoder from config and then loads weights from `PolyBert_Regressor.pt`.
 
+Validate tokenizer loading:
+
+```bash
+kubectl -n "$NAMESPACE" exec -i mmpae-pvc-shell -c main -- \
+  /opt/conda/envs/main/bin/python - <<'PY'
+from transformers import AutoTokenizer
+tok = AutoTokenizer.from_pretrained("/data/polyBERT")
+print(type(tok).__name__, len(tok), tok.pad_token_id, tok.eos_token_id)
+PY
+```
+
+Expected output:
+
+```text
+DebertaV2TokenizerFast 270 267 266
+```
+
 ## Predictor Checkpoint
 
-Download the predictor checkpoint:
+Download the predictor checkpoint from Zenodo record `17665048` using the included script:
 
 ```bash
 kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- mkdir -p /data/scripts /data/ckpt
@@ -265,9 +304,11 @@ kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- ls -lh /data/ckpt/PolyBe
 
 Expected size is about 293 MiB.
 
+Do not use `Property_Transformer.pt` as `--predictor_checkpoint` for `train_HMMPAE.py`; it is an AE training-state checkpoint, not the PolyBERT regressor state dict expected by the trainer.
+
 ## Tokenize polyOne
 
-Copy the current preprocessing script to the PVC and submit the preprocessing job:
+Copy the current preprocessing script to the PVC and submit the preprocessing job. This converts raw PSMILES strings to numeric token IDs and attention masks, which are the Transformer input format:
 
 ```bash
 kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- mkdir -p /data/scripts
@@ -294,6 +335,27 @@ Each tokenized row contains:
 - `properties`
 
 The verified token length is `160`; property vectors have length `37`, and training uses the first `29` properties.
+
+Quick content check:
+
+```bash
+kubectl -n "$NAMESPACE" exec -i mmpae-pvc-shell -c main -- \
+  /opt/conda/envs/main/bin/python - <<'PY'
+import pandas as pd
+from pathlib import Path
+path = sorted(Path("/data/polyone_tokenized").glob("*.parquet"))[0]
+df = pd.read_parquet(path)
+print(path.name, df.shape)
+print(df.columns.tolist())
+print(len(df.iloc[0]["token_ids"]), len(df.iloc[0]["properties"]))
+PY
+```
+
+Expected token/property lengths:
+
+```text
+160 37
+```
 
 ## Load Check
 
@@ -442,6 +504,22 @@ Outputs are written under:
 ```text
 /data/runs/scaleup-h200-1gpu-bs128
 ```
+
+For a shorter pilot run that keeps the same 0.354B large model but targets roughly 12 hours, use:
+
+```bash
+kubectl -n "$NAMESPACE" delete job mmpae-scaleup-12h --ignore-not-found
+kubectl apply -f k8s.local/mmpae-scaleup-12h-job.yaml
+kubectl -n "$NAMESPACE" logs -f job/mmpae-scaleup-12h -c main
+```
+
+The 12-hour template changes:
+
+- `epochs`: `200` -> `90`
+- `interval`: `10` -> `30`
+- `exp_name`: `scaleup-h200-1gpu-bs128-e90`
+
+This is a pilot setting for reporting training feasibility and early evaluation curves. Use the 200-epoch job for the fuller reproduction run.
 
 ## Monitoring
 

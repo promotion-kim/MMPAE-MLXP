@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mmpae-scaleup-12h
+  namespace: __NAMESPACE__
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        private-h200-aipr-0-pod-default: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: __IMAGE__
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+              cd /workspace
+              if [ -f /data/scripts/train_HMMPAE.py ]; then
+                cp /data/scripts/train_HMMPAE.py /workspace/train_HMMPAE.py
+              fi
+              /opt/conda/envs/main/bin/python smoke_test.py --device cuda
+              /opt/conda/envs/main/bin/python train_HMMPAE.py \
+                --data_path /data/polyone_tokenized \
+                --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
+                --tokenizer_path /data/polyBERT \
+                --prefix /data/runs \
+                --model_size large \
+                --loss_type CwA \
+                --temperature 0.2 \
+                --beta 1000 \
+                --alpha 100 \
+                --epochs 90 \
+                --batch_size 128 \
+                --eval_batch_size 512 \
+                --steps 1024 \
+                --interval 30 \
+                --dec_layers 12 \
+                --exp_name scaleup-h200-1gpu-bs128-e90
+          resources:
+            requests:
+              cpu: "16"
+              memory: "128Gi"
+            limits:
+              cpu: "16"
+              memory: "128Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: __PVC_NAME__
