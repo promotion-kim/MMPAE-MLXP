@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mmpae-pvc-shell
+  namespace: __NAMESPACE__
+  labels:
+    private-h200-aipr-0-pod-default: "true"
+spec:
+  restartPolicy: Never
+  containers:
+    - name: main
+      image: __IMAGE__
+      imagePullPolicy: Always
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -euo pipefail
+          mkdir -p /data/polyone /data/polyone_tokenized /data/polyBERT /data/ckpt /data/runs
+          sleep infinity
+      resources:
+        requests:
+          cpu: "2"
+          memory: "32Gi"
+        limits:
+          cpu: "2"
+          memory: "32Gi"
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: __PVC_NAME__

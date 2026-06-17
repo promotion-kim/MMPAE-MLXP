@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mmpae-load-check
+  namespace: __NAMESPACE__
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        private-h200-aipr-0-pod-default: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: __IMAGE__
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              cd /workspace
+              /opt/conda/envs/main/bin/python - <<'PY'
+              from pathlib import Path
+              import pandas as pd
+              import torch
+              from types import SimpleNamespace
+              from transformers import AutoConfig, AutoModel, AutoTokenizer
+
+              data_dir = Path("/data/polyone_tokenized")
+              ckpt = Path("/data/ckpt/PolyBert_Regressor.pt")
+              polybert = Path("/data/polyBERT")
+
+              required = ["polyOne_ar.parquet", "polyOne_az.parquet", "polyOne_hu.parquet", "polyOne_hx.parquet"]
+              for name in required:
+                  path = data_dir / name
+                  assert path.exists(), f"missing {path}"
+                  df = pd.read_parquet(path, columns=["token_ids", "mask", "properties"])
+                  print(name, len(df), len(df.iloc[0]["token_ids"]), len(df.iloc[0]["properties"]), flush=True)
+
+              assert ckpt.exists(), f"missing {ckpt}"
+              print("checkpoint", ckpt.stat().st_size, flush=True)
+
+              tokenizer = AutoTokenizer.from_pretrained(str(polybert))
+              print("tokenizer", type(tokenizer).__name__, len(tokenizer), tokenizer.pad_token_id, tokenizer.eos_token_id, flush=True)
+
+              try:
+                  encoder = AutoModel.from_pretrained(str(polybert))
+                  print("AutoModel.from_pretrained OK", flush=True)
+              except OSError as exc:
+                  print("AutoModel.from_pretrained failed; using config fallback", exc, flush=True)
+                  encoder = AutoModel.from_config(AutoConfig.from_pretrained(str(polybert)))
+
+              state = torch.load(str(ckpt), map_location="cpu", weights_only=False)
+              assert "state_dict" in state, "checkpoint missing state_dict"
+              print("state_dict keys", len(state["state_dict"]), flush=True)
+              import train_HMMPAE as train_mod
+              train_mod.config = SimpleNamespace(layer="multi")
+              predictor = train_mod.PolyBertRegresser(encoder=encoder, tokenizer=tokenizer, num_properties=29)
+              predictor.load_state_dict(state["state_dict"])
+              print("predictor load_state_dict OK", flush=True)
+              print("load check passed", flush=True)
+              PY
+          resources:
+            requests:
+              cpu: "4"
+              memory: "64Gi"
+            limits:
+              cpu: "4"
+              memory: "64Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: __PVC_NAME__

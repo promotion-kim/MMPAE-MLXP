@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mmpae-preprocess
+  namespace: __NAMESPACE__
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        private-h200-aipr-0-pod-default: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: __IMAGE__
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              cd /workspace
+              mkdir -p data kuelumbus /data/polyone_tokenized
+              ln -sfn /data/polyone data/polyone
+              ln -sfn /data/polyone_tokenized data/polyone_tokenized
+              ln -sfn /data/polyBERT kuelumbus/polyBERT
+              SCRIPT=/workspace/polyone_token_extract.py
+              if [ -f /data/scripts/polyone_token_extract.py ]; then
+                SCRIPT=/data/scripts/polyone_token_extract.py
+              fi
+              /opt/conda/envs/main/bin/python "$SCRIPT" \
+                --source /data/polyone \
+                --dest /data/polyone_tokenized \
+                --tokenizer_path /data/polyBERT \
+                --workers 2 \
+                --batch_size 1024
+          resources:
+            requests:
+              cpu: "4"
+              memory: "64Gi"
+            limits:
+              cpu: "4"
+              memory: "64Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: __PVC_NAME__

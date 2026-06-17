@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mmpae-pvc-check
+  namespace: __NAMESPACE__
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        private-h200-aipr-0-pod-default: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              df -h /data
+              mkdir -p /data/mmpae_check
+              date > /data/mmpae_check/hello.txt
+              ls -lah /data
+              ls -lah /data/mmpae_check
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: __PVC_NAME__

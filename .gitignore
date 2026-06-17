@@ -1,0 +1,26 @@
+.git/
+.cache/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+
+# Local credentials and cluster-specific files
+references/
+k8s.local/
+*.kubeconfig
+*kubeconfig*.yaml
+
+# Data, checkpoints, and run outputs
+data/
+ckpt/
+runs/
+wandb/
+*.parquet
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Local model/tokenizer artifacts copied separately to the PVC
+polyBERT/

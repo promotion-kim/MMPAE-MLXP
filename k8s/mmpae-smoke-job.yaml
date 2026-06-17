@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mmpae-smoke
+  namespace: __NAMESPACE__
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        private-h200-aipr-0-pod-default: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: __IMAGE__
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              cd /workspace
+              /opt/conda/envs/main/bin/python smoke_test.py --device cuda
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: 1
