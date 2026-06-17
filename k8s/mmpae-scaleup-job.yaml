@@ -21,9 +21,6 @@ spec:
               set -euo pipefail
               export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
               cd /workspace
-              if [ -f /data/scripts/train_HMMPAE.py ]; then
-                cp /data/scripts/train_HMMPAE.py /workspace/train_HMMPAE.py
-              fi
               /opt/conda/envs/main/bin/python smoke_test.py --device cuda
               /opt/conda/envs/main/bin/python train_HMMPAE.py \
                 --data_path /data/polyone_tokenized \
