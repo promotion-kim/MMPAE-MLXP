@@ -30,18 +30,18 @@ spec:
                 --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
                 --tokenizer_path /data/polyBERT \
                 --prefix /data/runs \
-                --model_size large \
+                --config_path configs/Inverse_CwA_0p35B.yaml \
                 --loss_type CwA \
                 --temperature 0.2 \
                 --beta 1000 \
                 --alpha 100 \
-                --epochs 200 \
+                --epochs 100 \
                 --batch_size 128 \
                 --eval_batch_size 512 \
                 --steps 1024 \
                 --interval 10 \
                 --dec_layers 12 \
-                --exp_name scaleup-h200-1gpu-bs128
+                --exp_name mmpae-0p35B-e100
           resources:
             requests:
               cpu: "16"

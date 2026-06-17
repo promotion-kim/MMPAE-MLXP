@@ -88,6 +88,7 @@ parser.add_argument("--model_size", type=str, default='base', choices=['small', 
 parser.add_argument('--property', default=False, type=lambda s: s in ["True", "true", 1])
 parser.add_argument('--layer', type=str, default="multi")
 parser.add_argument('--config_name', default='Inverse_CwA', type=str)
+parser.add_argument("--config_path", type=str, default=None, help="explicit model config yaml path")
 
 parser.add_argument("--wandb", default=False, type=lambda s: s in ["True", "true", 1])
 parser.add_argument("--debug", default=False, type=lambda s: s in ["True", "true", 1])
@@ -114,7 +115,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def set_config(args):
-    fname = f'./configs/Inverse_CwA_large.yaml'
+    fname = args.config_path or f'./configs/{args.config_name}_{args.model_size}.yaml'
     with open(fname, 'r') as y_file:
         yaml_file = yaml.load(y_file, Loader=yaml.FullLoader)
         config = DottedDict(dict(yaml_file))
