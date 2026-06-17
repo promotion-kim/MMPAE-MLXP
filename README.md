@@ -38,7 +38,8 @@ This workflow is not the full original paper-scale default. It is a practical 1 
 - tokenizer: local `polyBERT` folder copied to `/data/polyBERT`
 - predictor checkpoint: `/data/ckpt/PolyBert_Regressor.pt`
 - training job: `k8s.local/mmpae-scaleup-job.yaml`
-- training config: `large`, 1 GPU, `batch_size=128`, `eval_batch_size=512`, `epochs=200`, `steps=1024`, `interval=10`
+- default training config: `configs/Inverse_CwA_0p35B.yaml`, 1 GPU, `batch_size=128`, `eval_batch_size=512`, `epochs=100`, `steps=1024`, `interval=10`
+- scale-up configs: see `EXPERIMENT_PLAN.md` for the 0.35B, 1B, 2B, and 4B rows
 
 `Property_Transformer.pt` from Zenodo record `17665048` is not the predictor checkpoint used by `train_HMMPAE.py`; it contains AE training state such as `AE`, `AE_ema`, and optimizer state. The predictor checkpoint used for this workflow is `PolyBert_Regressor.pt`.
 
@@ -70,7 +71,6 @@ $PVC_NAME mounted at /data
 /data/polyone_tokenized/*.parquet
 /data/polyBERT/
 /data/ckpt/PolyBert_Regressor.pt
-/data/scripts/train_HMMPAE.py
 ```
 
 ## Local Smoke Test
@@ -217,7 +217,6 @@ The final PVC layout should be:
 /data/polyBERT/
 /data/ckpt/PolyBert_Regressor.pt
 /data/scripts/polyone_token_extract.py
-/data/scripts/train_HMMPAE.py
 /data/runs/
 ```
 
@@ -424,27 +423,24 @@ spec:
               set -euo pipefail
               export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
               cd /workspace
-              if [ -f /data/scripts/train_HMMPAE.py ]; then
-                cp /data/scripts/train_HMMPAE.py /workspace/train_HMMPAE.py
-              fi
               /opt/conda/envs/main/bin/python smoke_test.py --device cuda
               /opt/conda/envs/main/bin/python train_HMMPAE.py \
                 --data_path /data/polyone_tokenized \
                 --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
                 --tokenizer_path /data/polyBERT \
                 --prefix /data/runs \
-                --model_size large \
+                --config_path configs/Inverse_CwA_0p35B.yaml \
                 --loss_type CwA \
                 --temperature 0.2 \
                 --beta 1000 \
                 --alpha 100 \
-                --epochs 200 \
+                --epochs 100 \
                 --batch_size 128 \
                 --eval_batch_size 512 \
                 --steps 1024 \
                 --interval 10 \
                 --dec_layers 12 \
-                --exp_name scaleup-h200-1gpu-bs128
+                --exp_name mmpae-0p35B-e100
           resources:
             requests:
               cpu: "16"
@@ -470,17 +466,12 @@ The required data layout inside the PVC is:
 /data/polyone_tokenized/*.parquet
 /data/polyBERT/
 /data/ckpt/PolyBert_Regressor.pt
-/data/scripts/train_HMMPAE.py
 /data/runs/
 ```
 
 ## Scale-Up Training
 
-Copy the current training script into the PVC so the job uses the patched tokenizer/config fallback:
-
-```bash
-kubectl -n "$NAMESPACE" cp train_HMMPAE.py mmpae-pvc-shell:/data/scripts/train_HMMPAE.py -c main
-```
+The training job uses the code and config files inside the pushed image. Rebuild and push the image whenever `train_HMMPAE.py`, `configs/*.yaml`, or the job command changes.
 
 Submit:
 
@@ -499,18 +490,18 @@ python train_HMMPAE.py \
   --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
   --tokenizer_path /data/polyBERT \
   --prefix /data/runs \
-  --model_size large \
+  --config_path configs/Inverse_CwA_0p35B.yaml \
   --loss_type CwA \
   --temperature 0.2 \
   --beta 1000 \
   --alpha 100 \
-  --epochs 200 \
+  --epochs 100 \
   --batch_size 128 \
   --eval_batch_size 512 \
   --steps 1024 \
   --interval 10 \
   --dec_layers 12 \
-  --exp_name scaleup-h200-1gpu-bs128
+  --exp_name mmpae-0p35B-e100
 ```
 
 `batch_size=512` caused CUDA OOM on 1 x H200. `batch_size=128` has been verified to start real training.
@@ -518,24 +509,10 @@ python train_HMMPAE.py \
 Outputs are written under:
 
 ```text
-/data/runs/scaleup-h200-1gpu-bs128
+/data/runs/mmpae-0p35B-e100
 ```
 
-For a shorter pilot run that keeps the same 0.354B large model but targets roughly 12 hours, use:
-
-```bash
-kubectl -n "$NAMESPACE" delete job mmpae-scaleup-12h --ignore-not-found
-kubectl apply -f k8s.local/mmpae-scaleup-12h-job.yaml
-kubectl -n "$NAMESPACE" logs -f job/mmpae-scaleup-12h -c main
-```
-
-The 12-hour template changes:
-
-- `epochs`: `200` -> `90`
-- `interval`: `10` -> `30`
-- `exp_name`: `scaleup-h200-1gpu-bs128-e90`
-
-This is a pilot setting for reporting training feasibility and early evaluation curves. Use the 200-epoch job for the fuller reproduction run.
+For the other scale-up rows, use the same job template and change only `--config_path` and `--exp_name` according to `EXPERIMENT_PLAN.md`.
 
 ## Monitoring
 
@@ -545,7 +522,7 @@ kubectl -n "$NAMESPACE" logs job/mmpae-scaleup -c main --tail=80
 kubectl -n "$NAMESPACE" exec <mmpae-scaleup-pod> -c main -- nvidia-smi
 ```
 
-In the verified run, epoch 1 took about 7 minutes for 1,024 training steps on one H200. The 200-epoch training loop is therefore roughly 23 hours before evaluation overhead. Because evaluation runs every 10 epochs and can be expensive, budget about 1 to 2 days for the full job unless the evaluation path is reduced.
+In the verified 0.35B run, epoch 1 took about 7 minutes for 1,024 training steps on one H200. The 100-epoch training loop is therefore about 11.5 hours before evaluation overhead. Because evaluation runs every 10 epochs, budget about 12 to 14 hours for the default job.
 
 ## Notes for Reuse
 
