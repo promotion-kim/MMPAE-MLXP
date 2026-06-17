@@ -306,6 +306,22 @@ Expected size is about 293 MiB.
 
 Do not use `Property_Transformer.pt` as `--predictor_checkpoint` for `train_HMMPAE.py`; it is an AE training-state checkpoint, not the PolyBERT regressor state dict expected by the trainer.
 
+## Optional Property Transformer Checkpoint
+
+`Property_Transformer.pt` can also be downloaded from Zenodo record `17665048`, but it is not used as `--predictor_checkpoint` in the current scale-up training jobs. The current jobs use `/data/ckpt/PolyBert_Regressor.pt`.
+
+Download it only when you need the original AE/property-transformer training-state checkpoint for inspection or a separate resume/evaluation workflow:
+
+```bash
+kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- mkdir -p /data/scripts /data/ckpt
+kubectl -n "$NAMESPACE" cp scripts/download_property_transformer.py mmpae-pvc-shell:/data/scripts/download_property_transformer.py -c main
+kubectl -n "$NAMESPACE" exec -it mmpae-pvc-shell -c main -- \
+  /opt/conda/envs/main/bin/python /data/scripts/download_property_transformer.py
+kubectl -n "$NAMESPACE" exec mmpae-pvc-shell -c main -- ls -lh /data/ckpt/Property_Transformer.pt
+```
+
+Expected size is about 3.8 GiB.
+
 ## Tokenize polyOne
 
 Copy the current preprocessing script to the PVC and submit the preprocessing job. This converts raw PSMILES strings to numeric token IDs and attention masks, which are the Transformer input format:
