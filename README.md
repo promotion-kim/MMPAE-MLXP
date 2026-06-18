@@ -423,6 +423,7 @@ spec:
               set -euo pipefail
               export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
               cd /workspace
+              /opt/conda/envs/main/bin/python -m py_compile train_HMMPAE.py models/MMTransformer.py
               /opt/conda/envs/main/bin/python smoke_test.py --device cuda
               /opt/conda/envs/main/bin/python train_HMMPAE.py \
                 --data_path /data/polyone_tokenized \
@@ -434,13 +435,17 @@ spec:
                 --temperature 0.2 \
                 --beta 1000 \
                 --alpha 100 \
-                --epochs 100 \
+                --epochs 200 \
                 --batch_size 128 \
                 --eval_batch_size 512 \
                 --steps 1024 \
                 --interval 10 \
+                --infer_steps 10 \
+                --final_eval_only True \
+                --checkpoint_interval 10 \
+                --run_final_test False \
                 --dec_layers 12 \
-                --exp_name mmpae-0p35B-e100
+                --exp_name mmpae-0p35B-e200
           resources:
             requests:
               cpu: "16"
@@ -495,13 +500,19 @@ python train_HMMPAE.py \
   --temperature 0.2 \
   --beta 1000 \
   --alpha 100 \
-  --epochs 100 \
+  --epochs 200 \
   --batch_size 128 \
   --eval_batch_size 512 \
   --steps 1024 \
   --interval 10 \
+  --infer_steps 10 \
+  --final_eval_only True \
+  --checkpoint_interval 10 \
+  --run_final_test False \
+  --hf_repo_id "$HF_REPO_ID" \
+  --hf_upload_every 10 \
   --dec_layers 12 \
-  --exp_name mmpae-0p35B-e100
+  --exp_name mmpae-0p35B-e200
 ```
 
 `batch_size=512` caused CUDA OOM on 1 x H200. `batch_size=128` has been verified to start real training.
@@ -509,10 +520,58 @@ python train_HMMPAE.py \
 Outputs are written under:
 
 ```text
-/data/runs/mmpae-0p35B-e100
+/data/runs/mmpae-0p35B-e200
 ```
 
 For the other scale-up rows, use the same job template and change only `--config_path` and `--exp_name` according to `EXPERIMENT_PLAN.md`.
+
+This experiment table uses MM-CwA training with `--inverse` omitted/False. The `Target RMSE/R2` metrics are still inverse-design metrics: the evaluator decodes from target properties, then scores generated PSMILES with the frozen PolyBERT property predictor. Do not add `--inverse True` for the scale-up rows unless creating a separate inverse-only comparison.
+
+To upload checkpoints every 10 epochs, create a Secret before submitting the job:
+
+```bash
+kubectl -n "$NAMESPACE" create secret generic mmpae-hf-upload \
+  --from-literal=repo_id=<your-hf-user-or-org>/mmpae-0p35B \
+  --from-literal=token=<write-token>
+```
+
+To run inference/evaluation only from an uploaded checkpoint:
+
+```bash
+python train_HMMPAE.py \
+  --data_path /data/polyone_tokenized \
+  --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
+  --tokenizer_path /data/polyBERT \
+  --prefix /data/runs \
+  --config_path configs/Inverse_CwA_0p35B.yaml \
+  --loss_type CwA \
+  --temperature 0.2 \
+  --beta 1000 \
+  --alpha 100 \
+  --epochs 200 \
+  --batch_size 128 \
+  --eval_batch_size 512 \
+  --steps 1024 \
+  --interval 10 \
+  --final_eval_only True \
+  --infer_steps 10 \
+  --dec_layers 12 \
+  --exp_name mmpae-hf-inference \
+  --inference_only True \
+  --hf_checkpoint_repo_id "$HF_REPO_ID" \
+  --hf_checkpoint_filename checkpoints/Polyone_AE_0100.pt
+```
+
+For the Kubernetes inference-only job, add the checkpoint path to the same Secret:
+
+```bash
+kubectl -n "$NAMESPACE" create secret generic mmpae-hf-upload \
+  --from-literal=repo_id=<your-hf-user-or-org>/mmpae-0p35B \
+  --from-literal=token=<read-token-or-write-token> \
+  --from-literal=checkpoint_filename=checkpoints/Polyone_AE_0100.pt \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f k8s/mmpae-hf-inference-job.yaml
+```
 
 ## Monitoring
 
@@ -522,7 +581,7 @@ kubectl -n "$NAMESPACE" logs job/mmpae-scaleup -c main --tail=80
 kubectl -n "$NAMESPACE" exec <mmpae-scaleup-pod> -c main -- nvidia-smi
 ```
 
-In the verified 0.35B run, epoch 1 took about 7 minutes for 1,024 training steps on one H200. The 100-epoch training loop is therefore about 11.5 hours before evaluation overhead. Because evaluation runs every 10 epochs, budget about 12 to 14 hours for the default job.
+In the verified 0.35B run, epoch 1 took about 7 minutes for 1,024 training steps on one H200. The 200-epoch training loop is therefore about 23 hours before inference and upload overhead. The default job saves checkpoints every 10 epochs, runs lightweight inference every 10 epochs, and runs full evaluation only at the final epoch.
 
 ## Notes for Reuse
 

@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mmpae-scaleup
+  name: mmpae-hf-inference
   namespace: __NAMESPACE__
 spec:
   backoffLimit: 0
@@ -28,40 +28,46 @@ spec:
                   name: mmpae-hf-upload
                   key: token
                   optional: true
+            - name: HF_CHECKPOINT_FILENAME
+              valueFrom:
+                secretKeyRef:
+                  name: mmpae-hf-upload
+                  key: checkpoint_filename
+                  optional: true
           command: ["/bin/bash", "-c"]
           args:
             - |
               set -euo pipefail
+              : "${HF_REPO_ID:?Set HF_REPO_ID, for example username/mmpae-0p35B}"
+              : "${HF_CHECKPOINT_FILENAME:?Set HF_CHECKPOINT_FILENAME, for example checkpoints/Polyone_AE_0100.pt}"
               export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
               cd /workspace
-              HF_UPLOAD_ARGS=()
-              if [[ -n "${HF_REPO_ID:-}" ]]; then
-                HF_UPLOAD_ARGS=(--hf_repo_id "$HF_REPO_ID" --hf_upload_every 10 --hf_private False)
+              HF_DOWNLOAD_ARGS=(--hf_checkpoint_repo_id "$HF_REPO_ID" --hf_checkpoint_filename "$HF_CHECKPOINT_FILENAME")
+              if [[ -n "${HF_CHECKPOINT_REVISION:-}" ]]; then
+                HF_DOWNLOAD_ARGS+=(--hf_checkpoint_revision "$HF_CHECKPOINT_REVISION")
               fi
               /opt/conda/envs/main/bin/python -m py_compile train_HMMPAE.py models/MMTransformer.py
-              /opt/conda/envs/main/bin/python smoke_test.py --device cuda
               /opt/conda/envs/main/bin/python train_HMMPAE.py \
                 --data_path /data/polyone_tokenized \
                 --predictor_checkpoint /data/ckpt/PolyBert_Regressor.pt \
                 --tokenizer_path /data/polyBERT \
                 --prefix /data/runs \
-                --config_path configs/Inverse_CwA_0p35B.yaml \
+                --config_path "${MODEL_CONFIG:-configs/Inverse_CwA_0p35B.yaml}" \
                 --loss_type CwA \
                 --temperature 0.2 \
                 --beta 1000 \
                 --alpha 100 \
-                --epochs 200 \
+                --epochs "${EPOCHS:-200}" \
                 --batch_size 128 \
                 --eval_batch_size 512 \
                 --steps 1024 \
                 --interval 10 \
-                --infer_steps 10 \
                 --final_eval_only True \
-                --checkpoint_interval 10 \
-                --run_final_test False \
+                --infer_steps "${INFER_STEPS:-10}" \
                 --dec_layers 12 \
-                --exp_name mmpae-0p35B-e200 \
-                "${HF_UPLOAD_ARGS[@]}"
+                --exp_name "${EXP_NAME:-mmpae-hf-inference}" \
+                --inference_only True \
+                "${HF_DOWNLOAD_ARGS[@]}"
           resources:
             requests:
               cpu: "16"

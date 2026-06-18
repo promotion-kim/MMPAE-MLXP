@@ -423,7 +423,7 @@ class MMTransformerAR(nn.Module):
 
 
     # Memory shape: [L, B, D]
-    def batch_decode(self, memory):
+    def batch_decode(self, memory, progress_callback=None):
         batch_size = memory.size(1)
         device = memory.device
 
@@ -446,20 +446,22 @@ class MMTransformerAR(nn.Module):
             next_item = torch.argmax(logp, dim=-1).unsqueeze(1)  
 
             init_input = torch.cat((init_input, next_item), dim=1)
+            if progress_callback is not None:
+                progress_callback(step + 1, self.max_sequence_length)
 
         inference = [seq[1:] for seq in init_input.tolist()]
 
         return inference
 
     # [B, 29]
-    def forward(self, properties=None, drop_rate=0.5, K=29, token_ids=None, mode='train'):
+    def forward(self, properties=None, drop_rate=0.5, K=29, token_ids=None, mode='train', progress_callback=None):
         assert mode in ['train', 'infer_psmiles', 'infer_properties'], "Invalid mode. Choose from 'train', 'infer_psmiles', or 'infer_properties'."
 
         if mode == 'infer_psmiles':
             # zs = self.encode_properties(properties, drop_rate=drop_rate)
             zs = self.encode_properties_KS(properties, K=K)
             memory = zs.permute(1, 0, 2)
-            return self.batch_decode(memory)
+            return self.batch_decode(memory, progress_callback=progress_callback)
 
         elif mode == 'infer_properties':
             zs = self.encode_tokens(token_ids, drop_rate=drop_rate)
@@ -590,4 +592,3 @@ class MMTransformerAR(nn.Module):
 
     def create_pad_mask(self, matrix: torch.tensor) -> torch.tensor:
         return (matrix == self.pad_idx)
-

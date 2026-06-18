@@ -1,0 +1,13 @@
+model:
+  tokenizer_path: kuelumbus/polyBERT
+
+  params:
+    latent_dim: 2304
+    d_model: 2304
+    nhead: 36
+    dim_feedforward: 4608
+    activation: "gelu"
+    dropout: 0.0
+    norm_first: true
+    bias: true
+    num_layers: 52
