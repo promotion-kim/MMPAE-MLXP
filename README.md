@@ -38,8 +38,8 @@ This workflow is not the full original paper-scale default. It is a practical 1 
 - tokenizer: local `polyBERT` folder copied to `/data/polyBERT`
 - predictor checkpoint: `/data/ckpt/PolyBert_Regressor.pt`
 - training job: `k8s.local/mmpae-scaleup-job.yaml`
-- default training config: `configs/Inverse_CwA_0p35B.yaml`, 1 GPU, `batch_size=128`, `eval_batch_size=512`, `epochs=100`, `steps=1024`, `interval=10`
-- scale-up configs: see `EXPERIMENT_PLAN.md` for the 0.35B, 1B, 2B, and 4B rows
+- default training config: `configs/Inverse_CwA_0p35B.yaml`, 1 GPU, `batch_size=128`, `eval_batch_size=512`, `epochs=200`, `steps=1024`, `interval=10`, `checkpoint_interval=10`, `infer_steps=10`
+- scale-up configs: see `EXPERIMENT_PLAN.md` for the 0.35B, 1.5B, 3B, and 8B rows
 
 `Property_Transformer.pt` from Zenodo record `17665048` is not the predictor checkpoint used by `train_HMMPAE.py`; it contains AE training state such as `AE`, `AE_ema`, and optimizer state. The predictor checkpoint used for this workflow is `PolyBert_Regressor.pt`.
 
@@ -570,7 +570,7 @@ kubectl -n "$NAMESPACE" create secret generic mmpae-hf-upload \
   --from-literal=token=<read-token-or-write-token> \
   --from-literal=checkpoint_filename=checkpoints/Polyone_AE_0100.pt \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f k8s/mmpae-hf-inference-job.yaml
+kubectl apply -f k8s.local/mmpae-hf-inference-job.yaml
 ```
 
 ## Monitoring
