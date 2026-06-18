@@ -45,7 +45,7 @@ Fill one row per completed run.
 
 | Exp ID | Actual params from log | Final epoch | Runtime | Peak GPU memory | Final total_loss | Final ce_loss | Final mse_loss | Final contrast_loss | Best Prop RMSE ↓ | Best Prop R2 ↑ | Validity ↑ | Tanimoto ↑ | Target RMSE ↓ | Target R2 ↑ | Run directory | Notes |
 |---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
-| `mmpae-0p35B-e100` |  | 100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| `mmpae-0p35B-e100` | 354497835 | 100 |  |  | 1324.6245 | 0.1203 | 3.1903 | 1.0055 |  |  |  |  |  |  |  |  |
 | `mmpae-1B-e100` |  | 100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | `mmpae-2B-e100` |  | 100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | `mmpae-4B-e100` |  | 100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
