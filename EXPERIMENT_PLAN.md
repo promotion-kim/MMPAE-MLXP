@@ -51,7 +51,7 @@ Fill one row per completed run.
 | Exp ID | Actual params from log | Final epoch | Runtime | Peak GPU memory | Final total_loss | Final ce_loss | Final mse_loss | Final contrast_loss | Best Prop RMSE ↓ | Best Prop R2 ↑ | Validity ↑ | Tanimoto ↑ | Target RMSE ↓ | Target R2 ↑ | Run directory | Notes |
 |---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
 | `mmpae-0p35B-e200` | 354497835 | 200 | 23h 49m 30s | 54490.3 MB | 1837.9699 | 0.0642 | 1.2396 | 1.7139 | 0.2417 | 0.9453 | 0.9758 | 0.5631 | 0.3607 | 0.8712 | `/data/runs/mmpae-0p35B-e200` | Complete; metrics from `Eval_0200_metrics.json` |
-| `mmpae-1p5B-e200` |  | 200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| `mmpae-1p5B-e260` | 1495526443 | 260 | 2d 8h 58m 17s | 35349 MB observed | 3446.8454 | 0.0620 | 1.1143 | 1.6677 | 0.2058 | 0.9547 | 0.9773 | 0.5963 | 0.3166 | 0.8863 | `/data/runs/mmpae-1p5B-e260-2gpu-bs128-lr5e5-b2000` | Complete; metrics from `Eval_0260_metrics.json`; actual run id `mmpae-1p5B-e260-2gpu-bs128-lr5e5-b2000`; improved via `lr=5e-5`, `beta=2000`, `epochs=260`, `alpha=100`, `2 x H200`, `data_parallel=True`, `batch_size=128`, `eval_batch_size=512`, `infer_steps=10`; uploaded to `luca0621/mmpae-1p5B-e260-2gpu-bs128-lr5e5-b2000` |
 | `mmpae-3B-e200` |  | 200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | `mmpae-8B-e200` |  | 200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
